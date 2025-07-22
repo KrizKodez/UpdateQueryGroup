@@ -1,0 +1,24 @@
+{
+    "WhatIf":   true,
+    "InstanceID": null,
+    "NamePattern": "*",
+    "Container": "",
+    "Groups": [],
+    "IsRootSearchAllowed": false,
+    "IsScriptblockAllowed": false,
+    "ForceRecycleBin": false,
+    "EnableMail": false,
+    "LogPath": "",
+    "LDAPAliases":{
+                   "sam": "samAccountName",
+                   "po": "postOfficeBox",
+                   "dn": "distinguishedName",
+                   "os": "operatingSystem"
+                  },
+    "Mail": {
+            "Domains": [],
+            "SmtpServer": null,
+            "Port": 25,
+            "From": null
+            }
+}

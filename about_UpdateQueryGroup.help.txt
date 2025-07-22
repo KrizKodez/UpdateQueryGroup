@@ -1,0 +1,384 @@
+TOPIC
+    about_UpdateQueryGroup
+
+SYNOPSIS
+    This help file explains the usage and functionality of the UpdateQueryGroup controller,
+    but also all other strange ideas which the author had during development.
+
+DESCRIPTION
+    Since its introduction in the year 2000, Active Directory has not received a feature for dynamic group memberships
+    comparable to that of Novell's directory service NDS (aka eDirectory).
+    While there are isolated approaches from Microsoft, for example, for Microsoft Exchange with dynamic distribution lists
+    based on PowerShell or in Azure with dynamic members, using a dynamic group in on-premises AD still requires third-party tools.
+    The author of this script had his own ideas about what a dynamic group should be able to do and is well aware that there are probably
+    already numerous other attempts, even better ones, to achieve the same thing. Nevertheless, he deliberately did not inform himself
+    about other solutions before starting this project in order not to be discouraged, and the result of this ignorance is now presented here.
+
+
+FEATURES
+    +   Mapping OUs into groups and vice versa.
+    +	Mapping groups into groups.
+    +   Source groups can be linked with the logical operators AND or OR.
+    +   LDAP Filter.
+    +   PowerShell Expression Language Filter.
+    +   Transformation of samAccountNames.
+    +   Declarative definition directly at the group object.
+    +   Exclude rules based on regular expressions.
+    +   Distribute group updates across different instances/servers.
+    +   WhatIf mode to protect the productive environment.
+    +   Log of all dynamic group changes.
+    +   Aliases for LDAP attribute names to keep the declaration text compact.
+    +   Container paths as short as possible to keep the declaration text compact.
+    +   Dynamic Expressions.
+
+CODE
+    The author has been working on a language standard for PowerShell for some time, and this script attempts to implement it.
+    It uses only JSON files for configuration, and functions are separated into private libraries to keep the main script, the controller,
+    readable. Likewise, code formatting is used to make it easier for the eye to quickly find code blocks or to avoid nesting too deeply.
+    Details like immutable function parameters aren't so obvious, but hopefully, they can be found at some point,
+    along with all the other rules, in a document published on GitHub.
+
+
+CONTENT
+    The solution consists of the following files:
+        
+        File                                        | Description
+        --------------------------------------------|------------------------------------------------------------------
+        about_UpdateQueryGroup.help.txt             |   This help file.
+        Config.json                                 |   A configuration file (This is the default name).
+        DynamicExpression.UpdateQueryGroup.lib.ps1  |   Library of Dynamic Expressions (Tool)
+        UpdateQueryGroup.lib.ps1                    |   Library of main script funtions (Tool)
+        UpdateQueryGroup.ps1                        |   The main script (Controller)
+
+    In the rest of this document, the UpdateQueryGroup.ps1 script is also referred to as the 'Controller'.
+
+
+EXECUTION
+    The nature of the problem is that the controller must be executed at regular intervals. Therefore, it was primarily designed
+    for use with a scheduled task, meaning the essential part of the public interface is located in the configuration file.
+    However, there is the 'Identity' parameter, which can be used in a manual call, for example, to update a single dynamic group or
+    to perform a WhatIf scenario with the configuration of this group.
+    
+    The following settings can be made for a scheduled task in the 'Action' tab:   
+
+        Example A
+        ---------------------------------------------------------------------------------------------
+        Program/script: PowerShell.exe 
+        Add arguments:  -Command D:\AD\UpdateQueryGroup.ps1
+        Start in:       D:\AD
+
+        Example B 
+        ---------------------------------------------------------------------------------------------
+        Program/script: PowerShell.exe 
+        Add arguments:  -Command D:\AD\UpdateQueryGroup.ps1 -ConfigFile D:\AD\Config.json
+        Start in:       <empty>
+    
+    Example A starts the controller in a pre-defined location and without the -ConfigFile parameter therefore the controller loads the default
+    'Config.json' file from this location. In Example B, the 'Start in' parameter is empty, and the controller is told which configuration file to load
+    using the -ConfigFile parameter.
+
+    To test a dynamic group, the following invocation could be used:
+
+        UpdateQueryGroup.ps1 -Identity TestGroup -WhatIf
+
+
+CONFIGURATION
+    Each configuration file should be treated as an independent instance and therefore used only by one scheduled task.
+    It's a matter of preference whether you use multiple controller directories, each with one configuration file and the default name 'Config.json',
+    or store multiple configuration files with different names in a single directory. In the latter case, Example B described above
+    shows the settings for the scheduled task.
+    The configuration file contains the following parameters:
+
+        Parameter            | Type      | Description
+        ---------------------|-----------|------------------------------------------------------------------------------------------
+        Container            | String    | DistinguishedName of a container with Dynamic Groups.
+        EnableMail           | Boolean   | Enable the send mail feature.
+        ForceRecycleBin      | Boolean   | Allow the controller to delete objects even the AD feature 'Recycle Bin' is not enabled.
+        Groups               | Array     | Statically defined Dynamic Groups.
+        InstanceID           | String    | Name of the instance/config file. 
+        IsRootSearchAllowed  | Boolean   | Allow object search starting at the domain root.
+        IsScriptblockAllowed | Boolean   | Allow the usage of a scriptblock in the 'Where' parameter of dynamic groups.
+        LDAPAliases          | Hashtable | Define aliases for long LDAP attribute names.
+        LogPath              | String    | Path to the Log directory.
+        Mail                 | Hashtable | Mail configuration values.
+        NamePattern          | String    | Wildcard pattern to define the Dynamic Groups to be processed.
+        WhatIf               | Boolean   | Enable or disable the WhatIf mode for this instance.
+
+    Comments:
+        +   InstanceID: The value must start with a letter and only alphanumerical charachters and the underscore are allowed.
+        +   NamePattern: The parameter could not be empty or NULL, if no pattern should be defined use the asterisk.
+        +   NamePattern, Container: If both the NamePattern and Container parameters are defined, the script searches for Dynamic Groups
+            in this container and with the defined pattern.
+        +   Groups: All 'Identity' formats that are also permitted in the MS Active Directory module are possible in this array.
+        +   ForceRecycleBin: You should only allow the controller to delete objects if a recycle bin exists,
+            this does not necessarily have to be the AD Recycle Bin.
+        +   LogPath: Backslashes must be specified twice to comply with the JSON format.
+        +   LDAPAliases: Hashtable of aliases for LDAP attributes to allow filter expressions as short as possible.
+                Key is the alias and the value is the valid LDAP attribute. e.g.:
+                {
+                   "sam": "samAccountName",
+                    "po": "postOfficeBox",
+                    "dn": "distinguishedName"
+                }
+        +   Mail: Hashtable of mail configuration parameters. The key 'Domains' contains an arraywith allowed domain names,
+            the 'From' key is the sender mail address.
+                {
+                    "Domains": ["test.de","test.com"],  
+                    "SmtpServer": null,
+                    "Port": 25,
+                    "From": "updates@test.de"
+                }
+
+
+QUICK INTRO
+    This section provides a brief overview of the creation of a dynamic group. A group becomes a dynamic group by adding
+    special parameters within the AD 'info' attribute. The recommended method for editing this 'info' attribute is the
+    AD Users and Computers snap-in (dsa.msc), also known as ADUC. In the graphical interface, it appears as the 'Notes' field.
+    
+    To mark a group as a dynamic group, the first line of this field must be the shebang line:
+        
+        #!QueryGroup
+    
+    With this value, the group draws the controller's attention, so to speak. However, two additional mandatory parameters are required
+    for the group to be processed:
+        
+        Enabled:True
+        Type:User
+    
+    The first one can be used to switch the processing of the group on or off, the second one defines which object types should be processed.
+    Now with these settings something should happen but unfortunately we get the error message:
+        
+        'Group has neither SearchBases nor VMembers defined.'
+    
+        Why?
+        The message is completely correct, as the parameter 'IsRootSearchAllowed = false' is set by default in the configuration file.
+        This setting is intended to prevent us from accidentally populating a group with all AD users, which we already have with the 'Domain Users'
+        group. Of course, this setting can be changed, but at your own risk.        
+        
+        !!! Changing the parameter 'IsRootSearchAllowed' may cause major data loss or problems in Active Directory !!!
+
+    Okay, then let’s define a SearchBase to define the search radius a little more precisely:
+
+        #!QueryGroup
+        Enabled:True
+        Type:User
+        SearchBase:OU=Developer,OU=DynamicGroups,DC=KrizKodezLab,DC=com
+
+    We have now defined four parameters, and this is the smallest possible configuration for a dynamic group and maps all users in the selected OU
+    into the group. However, only users directly located in this container are found; if you want to consider the entire subtree,
+    you need the 'SearchScope' parameter: 
+
+        #!QueryGroup
+        Enabled:True
+        Type:User
+        SearchBase:OU=Developer,OU=DynamicGroups,DC=KrizKodezLab,DC=com
+        SearchScope:subtree
+
+    However, we don't have to limit ourselves to one OU and can add as many additional 'SearchBase' parameters as we want:
+
+        #!QueryGroup
+        Enabled:True
+        Type:User
+        SearchBase:OU=NET-Developer,OU=DynamicGroups,DC=KrizKodezLab,DC=com
+        SearchBase:OU=Java-Developer,OU=DynamicGroups,DC=KrizKodezLab,DC=com
+        SearchScope:subtree
+
+    In this example, we see that some parameters can occur multiple times, while others can only occur once. For parameters like 'SearchBase',
+    this corresponds to a logical OR. The 'SearchScope' parameter can only occur once and is valid for all SearchBase parameters.
+    You can see which parameters could occur multiple times in the 'GROUP PARAMETERS' section table, column 'Multiplicity'.
+    
+    A problem becomes apparent when we use a distinguishedName as path in the Searchbase parameter. The 'Notes' field in the ADUC tool
+    isn't very large, and the long names quickly lead to line breaks, which makes the group's parameter list confusing.
+    Therefore, there are several methods for shortening it.
+
+        First method:
+        The distinguishedName only needs to be spelled out until a container is clearly defined:
+            SearchBase:OU=NET-Developer
+        This would also be valid if there isn't another OU somewhere in the directory that has this prefix. For example, if these OUs exist
+            OU=NET-Developer,DC=KrizKodezLab,DC=com
+            OU=NET-Developer,OU=Other-Container,DC=KrizKodezLab,DC=com
+        the prefix would be too short, resulting in the following error message:
+            'Parameter (SearchBase) contains unknown/ambiguous OU value (OU=NET-Developer)'.
+        
+        Second Method:
+        The SearchBase can also be defined using the 'Name' attribute:
+            SearchBase:NET-Developer
+        Here too, no other OU may have the identical name.
+
+        Third method:
+        The SearcBase can also be defined using the 'canonicalName' attribute:
+            SearchBase:/Developer/Sub-Developer
+        The domain name at the beginning can be replaced by a backslash. The canonica name can be written either from top-to-bottom or
+        from bottom-to-top:
+            SearchBase: Sub-Developer/Developer/KrizKodezLab.com
+
+
+    If you don't want to map an entire container to the group, you can use the 'Filter' and 'LDAPFilter' parameters.
+    Their use is identical to that in the Microsoft Active Directory module.
+    The following example shows a filter that adds only the accounts of the OU to the group whose name has the prefix 'Java*':
+        
+        #!QueryGroup
+        Enabled:True
+        Type:User
+        SearchBase:OU=NET-Developer,OU=DynamicGroups,DC=KrizKodezLab,DC=com
+        SearchScope:subtree
+        Filter:Name -like 'Java*'
+
+    Another very powerful way to define group members is available with the 'VMember' parameter. In this method, you specify the name
+    of a group whose members should be included in the dynamic group for example the members of the group 'DistributionGroup1' should be
+    member of the dynamic group:
+
+        #!QueryGroup
+        Enabled:True
+        Type:User
+        VMember:DistributionGroup1
+
+        !!! By appending the RID to the name of the VMember group, it can be found even after renaming !!!
+            VMember:DistributionGroup1[12746]
+
+        Why don't we simply nest the group 'DistributionGroup1' in the dynamic group?
+            First reason:
+            This reason is clear from the name of the example group. A distribution group as a member of a security group would
+            not be effective for securing a resource. Using the 'VMember' parameter, you can implicitly convert distribution groups into security groups.
+            If you have a distribution list and you want to keep an identical security group up to date, you can do this using a dynamic group.
+
+            Second reason:
+            With the VMember parameter, groups can be logically linked with a comma separated list of group names:
+                
+                #!QueryGroup
+                Enabled:True
+                Type:User
+                VMember:Resource_Homeshare,Role_CitrixAdmin
+
+            In this example, only objects that are members of 'Resource_Homeshare' AND 'Role_CitrixAdmin' would be added to the dynamic group.
+            Parameter 'VMember' can also occur as often as desired, as in the following example:
+                
+                #!QueryGroup
+                Enabled:True
+                Type:User
+                VMember:Resource_Homeshare,Role_CitrixAdmin
+                VMember:Role_FileAdmin
+            
+            This corresponds to the logical expression 'Role_FileAdmin' OR ('Resource_Homeshare' AND 'Role_CitrixAdmin').
+
+            Third reason:
+            With the parameters 'Exclude' and 'Where', members can still be filtered out, this also does not work with nested groups.
+
+
+
+GROUP PARAMETERS
+    In this section, we provide a complete list of all parameters for configuring dynamic groups, as well as detailed information
+    on the use of individual parameters.
+
+    Parameter           | Mandatory | Multiplicity | Value              | Description
+    --------------------|-----------|------------------------------------------------------------------------------------------
+    Enable              | Yes       | Single       | true | false       | Enable or disable the dynamic update.
+    Exclude             | No        | Multiple     | String             | RegEx to exclude objects from the dynamic group membership.
+    Filter              | No        | Single       | String             | A valid PowerShell Expression Language filter string.
+    ForceType           | No        | Single       | true | false       | If enabled remove all objects from the group which are not from defined 'Type'.
+    ID                  | No        | Single       | String             | InstanceID of a dedicated script instance.
+    LDAPFilter          | No        | Single       | String             | A valid LDAP filter.
+    Mail                | No        | Multiple     | Mail address       | Receiver of a summary of the changes.
+    PushOU              | No        | Single       | String             | Move objects which are member of the group to this OU.
+    PushScope           | Yes       | Single       | OneLevel | Subtree | Define the size of the PushScope.
+    PullOU              | No        | Single       | String             | Move objects which are not members anymore to this OU.
+    SamIn               | No        | Single       | String             | RegEx to capture data from the object samAccountName. 
+    SamOut              | No        | Single       | String             | Define a new samAccountName and use the captured data from SamIn.
+    SearchBase          | No        | Multiple     | String             | Search path for objects.
+    SearchScope         | Yes       | Single       | OneLevel | Subtree | Search the SearchBase path only or include child paths.
+    Type                | Yes       | Single       | User | Computer    | Define the type of objects in the dynamic group.
+    VMember             | No        | Multiple     | Group name         | Objects of this group will be included to the dynamic group.
+    WhatIf              | No        | Single       | true | false       | Enable or disable the WhatIf mode for this group.
+    Where               | No        | Single       | String             | Valid Where-Object command.
+                   
+    
+    EXCLUDE
+        Each 'Exclude' parameter must be defined in the following form:
+            <LDAPAttributeName>[<RegEx>]
+        The value of the LDAP attribute is compared with the regular expression, and if it matches, the object is removed from the result.
+            samAccountName[-a$]
+       This rule would filter out all users whose samAccountName attribute value has the suffix '-a'.
+       You could also use an alias defined in the configuartion file for the LDAPAttributeName.
+
+    FORCETYPE
+        If this parameter is TRUE the script will remove all objects from the dynamic group which are not of the type defined
+        in the parameter 'Type'. By default, the controller will only add or delete objects of the defined type. Anything else that is a member
+        of the group, such as manually added groups, will not be changed unless enabled with this parameter.
+
+    ID
+        The processing of a group can be tied to a specific instance of a script (scheduled task). To do this, the 'InstanceID'
+        of the config file must be entered here. The idea behind this is that different scripts with different service accounts or time intervals
+        may need to run.
+
+    MAIL
+        Here you can specify email recipients who should be notified of the group changes. Each recipient must be defined in a separate mail parameter.
+        An abbreviated format can be used, where the email address is specified without the domain. The first domain of the Mail.Domains parameter
+        from the configuration file is then used as the domain.
+
+    PUSHOU 
+        While the 'SearchBase' parameter helps map a container to a dynamic group, the 'PushOU' parameter is used to map a dynamic group to a container.
+        This means that all members of the group are moved to this container. A path to the container must be defined. The pseudo-container 'Recycle Bin'
+        can be specified to delete the object.
+
+    PUSHSCOPE
+        Defines whether the 'PushOU' also contains all its sub OUs.
+
+    PULLOU 
+        This parameter can only be used if a PushOU has been defined. If an object is removed from a dynamic group, it is moved from the PushOU to the PullOU.
+        The path of the container must be defined. The pseudo-container 'Recycle Bin' can be specified to delete the object.
+
+    SAMIN/SAMOUT
+        Both of these parameters must be defined together. They perform a simple transformation of the 'samAccountName' attribute. SamIn is a 
+        regular expression with any capture groups, and SamOut then constructs a new samAccountName from the results in the capture groups.
+        The idea behind these parameters is, for example, if users have multiple accounts, the check should be performed on one account, but another
+        account of the user becomes a member of the dynamic group.
+            
+            The  user 'User1' is in the Role_FileAdmin role group with his non-privileged account, but should be in a resource group (dynamic group)
+            with his User1-A account:
+
+            #!QueryGroup
+            Enabled:True
+            Type:User
+            VMmeber:Role_FileAdmin
+            SamIn: .*
+            SamOut: [0]-A
+            
+            The capture group '[0]' represents the entire string if a match is present. All other capture groups would be [1],[2]...
+
+    VMEMBER 
+        This parameter contains a comma-separated list of group names. Only objects contained in all groups in the list are considered.
+        The groups are therefore AND-linked. Groups should be identified here by their 'samAccountName'. If you want to ensure that the 'VMember'
+        parameter also works when groups have been renamed, you can also specify the group's RID e.g. VMember:Group1[RID1],Group2[RID2]
+        If there are multiple 'VMember' parameters, they are all linked with OR:
+
+            VMember:Group1,Group2
+            VMember:Group3,Group4
+
+            The example above corresponds to the following logical expression: (Group1 AND Group2) OR (Group3 AND Group4)
+
+    WHATIF         
+        This parameter enables the WhatIf mode for a single group. Before a new group goes live, a test run can be performed and possible changes can
+        be reviewed in the group log. This also makes it possible to test a group without activating WhatIf mode for the entire instance.
+ 
+LOGGING
+    Two types of logs are stored in the directory defined by the config parameter 'LogPath'. First, the log of the controller itself in the form
+    <DATE>_<HOSTINSTANCE>_UpdateQueryGroup.txt, where HOSTINSTANCE is either the host name of the machine on which the controller is running
+    or the 'InstanceID' defined in the configuration file executed by the controller.
+    For each dynamic group there is a subdirectory with the naming scheme <RID>_<GROUPNAME>.The RID is integrated into the directory name so that
+    renamed groups are easier to identify. Each directory then contains the daily log, which records all changes to the group, as well
+    as the _QueryParamter.json file, which contains all recognized parameters of the group, for debugging purposes.
+
+
+NOTE
+    The mail function has not been sufficiently tested.
+    The DynamicExpression feature has not been sufficiently tested.
+
+KEYWORDS
+    None
+
+SEE ALSO
+    Hier Link zur Github seite
+
+ABOUT TOPICS
+    None
+   
