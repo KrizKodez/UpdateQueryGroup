@@ -27,11 +27,25 @@ The solution presented here has the following features that the author found use
 +   Aliases for LDAP attribute names to keep the declaration text compact.
 +   Container paths as short as possible to keep the declaration text compact.
 
+The easiest way to make a group dynamic is to use the Active Directory Users and Computers snap-in (dsa.msc). Open the properties of the desired group and edit the 'Notes' text field, the name is somewhat confusing because the Active Directory attribute is actually called 'info'.
 
-<img width="408" height="482" alt="DynamicGroup_Example" src="https://github.com/user-attachments/assets/75bdef34-27b3-4b79-93eb-9a06d14fcc2c" />
+The example picture below shows the following configuration:\
+
+#!QueryGroup\
+Enabled:True\
+Type:User\
+SearchBase:OU=Developer,DC=KrizKodezLab,DC=com
+
+The first line must be the shebang line to allow the script to detect the dynamic group. Each subsequent line always consists of a parameter name and its value in the form
+
+\<ParameterName>: \<ParameterValue>
+
+The parameter 'Enabled' is mandatory and enables or disables changes to the group by the script. The 'Type' option lets you choose whether User or Computer accounts become members of the group. To fully map an OU into the group (that is then a shadow group) a SearchBase is defined which points to the OU.
+
+<img style="display: block; margin: 0 auto" width="408" height="482" alt="DynamicGroup_Example" src="https://github.com/user-attachments/assets/75bdef34-27b3-4b79-93eb-9a06d14fcc2c" />
 
 
-For a detailed description and usage, the interested reader should please study the about_UpdateQueryGroup file, otherwise everything would have to be repeated here.
+For a much more detailed description and usage, the interested reader should please study the about_UpdateQueryGroup help file, otherwise everything would have to be repeated here.
 
 ## Contributing
 All PowerShell developers or Active Directory experts are very welcome to help and make the code better, more readable or contribute new ideas. 
