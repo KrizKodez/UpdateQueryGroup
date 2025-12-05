@@ -27,6 +27,10 @@ The solution presented here has the following features that the author found use
 +   Aliases for LDAP attribute names to keep the declaration text compact.
 +   Container paths as short as possible to keep the declaration text compact.
 
+
+<img width="408" height="482" alt="DynamicGroup_Example" src="https://github.com/user-attachments/assets/75bdef34-27b3-4b79-93eb-9a06d14fcc2c" />
+
+
 For a detailed description and usage, the interested reader should please study the about_UpdateQueryGroup file, otherwise everything would have to be repeated here.
 
 ## Contributing
@@ -41,3 +45,4 @@ This project is licensed under the terms of the GPL V3 license. Please see the i
 
 ### Version 0.1.0 (2025/07/22)
 First release, testing has been done but bugs may still exist.
+
