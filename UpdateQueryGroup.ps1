@@ -115,7 +115,7 @@ Import-Module -Name ActiveDirectory -ErrorAction Stop
     # CONSTANTS
     New-Variable -Name SCRIPT_LOG_NAME          -Value 'UpdateQueryGroup.txt' -Option Constant -WhatIf:$false
     New-Variable -Name GROUP_QUERYDATA_LOG_NAME -Value '_QueryParameters'     -Option Constant -WhatIf:$false
-    New-Variable -Name REXEX_FAILED_FLAG        -Value '^\s*FAILED\s*\|'      -Option Constant -WhatIf:$false
+    New-Variable -Name REGEX_FAILED_FLAG        -Value '^\s*FAILED\s*\|'      -Option Constant -WhatIf:$false
 
     # VARIABLES             
     $Domain       = $null                                 # Several Domain data and OU names.
@@ -273,7 +273,7 @@ foreach ($Group in $Groups)
 # Update the 'FAILED' flag in the group description.
 foreach ($Group in $Groups)
 {
-    $IsFailedFlagSet = $Group.Description -match $REXEX_FAILED_FLAG
+    $IsFailedFlagSet = $Group.Description -match $REGEX_FAILED_FLAG
     if ($FailedGroups -contains $Group)
     {
         if ((-not $IsFailedFlagSet) -and $PSCmdlet.ShouldProcess($Group.Name,'Set FAILED flag in group description'))
@@ -283,7 +283,7 @@ foreach ($Group in $Groups)
     {
         if ($IsFailedFlagSet -and $PSCmdlet.ShouldProcess($Group.Name,'Clear FAILED flag in group description'))
         {
-            $NewDescription = ($Group.Description -replace $REXEX_FAILED_FLAG,'').TrimStart(' ')
+            $NewDescription = ($Group.Description -replace $REGEX_FAILED_FLAG,'').TrimStart(' ')
             Set-ADGroup -Identity $Group.SamAccountName -Description $NewDescription -WhatIf:$false -ErrorAction Stop    
         }
     }
